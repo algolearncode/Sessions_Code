@@ -1,0 +1,165 @@
+# zipline import
+from zipline.pipeline.data import EquityPricing
+from zipline.finance import slippage 
+from zipline.api import (   symbol,
+                            schedule_function,
+                            date_rules,
+                            time_rules,
+                            order_percent,
+                            order_target_percent,
+                            get_open_orders,
+                            cancel_order,
+                            set_slippage,
+                            get_datetime)
+
+# import pandas and numpy
+import pandas as pd
+import numpy as np
+
+def initialize(context):
+
+    # slippage model
+    set_slippage(slippage.FixedSlippage(spread=0.01))
+
+    # stock universe - list of tickers
+    securities_500 = ['MMM','ABT','ABBV','ABMD','ACN','ATVI','ADBE','AMD','AAP','AES','AFL','A','APD','AKAM','ALK','ALB','ARE','ALXN','ALGN','ALLE','LNT','ALL','GOOGL','GOOG','MO','AMZN','AEE','AAL','AEP','AXP','AIG','AMT','AWK','AMP','ABC','AME','AMGN','APH','ADI','ANSS','ANTM','AON','AOS','APA','AAPL','AMAT','ADM','ANET','AJG','AIZ','T','ATO','ADSK','ADP','AZO','AVB','AVY','BLL','BAC','BK','BAX','BDX','BRK.B','BBY','BIO','BIIB','BLK','BA','BKNG','BWA','BXP','BSX','BMY','AVGO','BR','BF.B','CHRW','COG','CDNS','CPB','COF','CAH','KMX','CCL','CARR','CAT','CBOE','CBRE','CDW','CE','CNC','CNP','CERN','CF','SCHW','CHTR','CVX','CMG','CB','CHD','CI','CINF','CTAS','CSCO','C','CFG','CTXS','CLX','CME','CMS','KO','CTSH','CL','CMCSA','CMA','CAG','COP','ED','STZ','COO','CPRT','GLW','CTVA','COST','CCI','CSX','CMI','CVS','DHI','DHR','DRI','DVA','DE','DAL','XRAY','DVN','DXCM','FANG','DLR','DFS','DISCA','DISCK','DISH','DG','DLTR','D','DPZ','DOV','DOW','DTE','DUK','DRE','DD','DXC','EMN','ETN','EBAY','ECL','EIX','EW','EA','EMR','ETR','EOG','EFX','EQIX','EQR','ESS','EL','EVRG','ES','RE','EXC','EXPE','EXPD','EXR','XOM','FFIV','FB','FAST','FRT','FDX','FIS','FITB','FE','FRC','FISV','FLT','FLIR','FLS','FMC','F','FTNT','FTV','FBHS','FOXA','FOX','BEN','FCX','GPS','GRMN','IT','GD','GE','GIS','GM','GPC','GILD','GPN','GS','GWW','HAL','HBI','HIG','HAS','HCA','HSIC','HSY','HES','HPE','HLT','HFC','HOLX','HD','HON','HRL','HST','HPQ','HUM','HBAN','HII','IEX','IDXX','INFO','ITW','ILMN','INCY','IR','INTC','ICE','IBM','IP','IPG','IFF','INTU','ISRG','IVZ','IPGP','IQV','IRM','JKHY','JBHT','SJM','JNJ','JCI','JPM','JNPR','KSU','K','KEY','KEYS','KMB','KIM','KMI','KLAC','KHC','KR','LB','LH','LRCX','LW','LVS','LEG','LDOS','LEN','LLY','LNC','LIN','LYV','LKQ','LMT','L','LOW','LYB','MTB','MRO','MPC','MKTX','MAR','MMC','MLM','MAS','MA','MKC','MXIM','MCD','MCK','MDT','MRK','MET','MTD','MGM','MCHP','MU','MSFT','MAA','MHK','TAP','MDLZ','MNST','MCO','MS','MOS','MSI','MSCI','NDAQ','NTAP','NFLX','NWL','NEM','NWSA','NWS','NEE','NLSN','NKE','NI','NSC','NTRS','NOC','NCLH','NOV','NRG','NUE','NVDA','NVR','ORLY','OXY','ODFL','OMC','OKE','ORCL','OTIS','PCAR','PKG','PH','PAYX','PAYC','PYPL','PNR','PBCT','PEP','PKI','PRGO','PFE','PM','PSX','PNW','PXD','PNC','PPG','PPL','PFG','PG','PGR','PLD','PRU','PEG','PSA','PHM','PVH','QRVO','PWR','QCOM','DGX','RL','RJF','O','REG','REGN','RF','RSG','RMD','RHI','ROK','ROP','ROST','RCL','SPGI','CRM','SBAC','SLB','STX','SEE','SRE','NOW','SHW','SPG','SWKS','SLG','SNA','SO','LUV','SWK','SBUX','STT','STE','SYK','SIVB','SNPS','SYY','TMUS','TROW','TTWO','TPR','TGT','TEL','FTI','TDY','TFX','TER','TSLA','TXN','TXT','TMO','TJX','TSCO','TT','TDG','TRV','TWTR','TYL','TSN','UDR','ULTA','USB','UA','UNP','UAL','UNH','UPS','URI','UHS','UNM','VLO','VAR','VTR','VRSN','VRSK','VZ','VRTX','VFC','V','VNO','VMC','WRB','WAB','WMT','WBA','DIS','WM','WAT','WEC','WFC','WELL','WST','WDC','WU','WRK','WY','WHR','WMB','WLTW','WYNN','XEL','XRX','XLNX','XYL','YUM','ZBRA','ZBH','ZION','ZTS']
+
+    # change string list of tickers into asset list using symbol function
+    context.universe = [symbol(s) for s in securities_500]
+    #print(len(context.universe))
+
+    # convert list into a dataframe 
+    context.universe_df = pd.DataFrame(index=context.universe)
+
+    # define # days in our moving average
+    context.sma_fast = 5
+    context.sma_slow = 20
+    context.sma_longterm = 200
+
+    # set counters
+    context.num_above = 0.0
+    context.total_num = 0.0
+    context.pct_above = 0.0
+
+    # schedule functions
+    schedule_function(trade_market_open, date_rules.every_day(), time_rules.market_open())
+    schedule_function(cancel_open, date_rules.every_day(), time_rules.market_close())
+    schedule_function(trade_market_close, date_rules.every_day(), time_rules.market_close(minutes=10))
+
+def before_trading_start(context,data):
+    
+    # get data for our moving average
+    context.hist = data.history(context.universe, 'close', context.sma_longterm, '1d')
+    # print('context.hist type is :', type(context.hist))
+
+def trade_market_open(context,data):
+
+    # Get backtest date and time for reference and print it
+    backtest_date = get_datetime()
+    print(backtest_date)
+
+    if len(context.portfolio.positions) > 0:
+        for sid in context.portfolio.positions:
+            order_target_percent(sid, 0.0)
+            print('Closed position for:', sid)
+
+     # re-name our context.universe_df to make it simpler
+    df = context.universe_df
+    # print(df)
+
+    # create series of data for each of our stocks
+    sma_longterm = context.hist.mean()
+    sma_slow = context.hist[-context.sma_slow:].mean()
+    sma_fast = context.hist[-context.sma_fast:].mean()
+    #print('sma type is :', type(sma))
+    current_px = data.current(context.universe, 'open')
+    #print('current_px type is :', type(current_px))
+    #above_sma = current_px > sma
+    #print('above_sma type is :', type(above_sma))
+    #below_sma = current_px < sma
+    #print('below_sma type is :', type(below_sma))
+
+    # add all series to dataframe
+    df['sma_longterm'] = sma_longterm
+    df['sma_slow'] = sma_slow
+    df['sma_fast'] = sma_fast
+    df['current_px'] = current_px
+    #df['above sma'] = above_sma
+    #df['below sma'] = below_sma
+    #print(df)
+
+    df_ss = df.loc[(df['current_px'] > df['sma_longterm']) & (df['current_px'] > df['sma_slow']) & (df['current_px'] > df['sma_fast']) & (df['sma_fast'] > df['sma_slow'])]
+    df_ss['pct_fast_over_slow'] = (df_ss['sma_fast'] - df_ss['sma_slow'])/df_ss['sma_slow']
+    print(len(df_ss))
+    short_trades = df_ss['pct_fast_over_slow'].nlargest(5)
+    print('short trades', short_trades)
+    for sid in short_trades.index:
+        order_target_percent(sid, -0.1)
+
+    df_bl = df.loc[(df['current_px'] < df['sma_longterm']) & (df['current_px'] < df['sma_slow']) & (df['current_px'] < df['sma_fast']) & (df['sma_fast'] < df['sma_slow'])]
+    df_bl['pct_fast_under_slow'] = (df_bl['sma_fast'] - df_bl['sma_slow'])/df_bl['sma_slow']
+    print(len(df_bl))
+    buy_trades = df_bl['pct_fast_under_slow'].nsmallest(5)
+    print('Buy trades', buy_trades)
+    for sid in buy_trades.index:
+        order_target_percent(sid, 0.1)
+    
+
+
+    # # research logic
+    # num_above_sma = (df['above sma'] == True).sum()
+    # num_below_sma = (df['below sma'] == True).sum()
+    # total_num = float(num_above_sma + num_below_sma)
+    # pct_above = 100*(num_above_sma/total_num)
+    # print('stocks above their sma:', num_above_sma)
+    # print('stocks below their sma:', num_below_sma)
+    # print('total stocks:', total_num)
+    # print('Pct stocks above their sma:', pct_above)
+    # context.num_above = context.num_above + num_above_sma
+    # context.total_num = context.total_num + total_num
+    # context.pct_above = 100*(context.num_above/context.total_num)
+    # print('cumulative stocks above their sma:', context.num_above)
+    # print('cumulative total number of stocks:', context.total_num)
+    # print('Running average pct stocks above their sma:', context.pct_above)
+
+    # create a dataframe for stocks above their sma
+    # df_above = df[df['above sma'] == True]
+    # df_above['pct_over_sma'] = (df_above['current_price'] - df_above['sma'])/df_above['sma']
+    # above_trades = df_above['pct_over_sma'].nlargest(2)
+    # print('above trades', above_trades)
+    # #print(type(above_trades))
+
+    # for sid in above_trades.index:
+    #     order_target_percent(sid, -0.25)
+    #     print('Selling short:', sid)
+
+    # # create a dataframe for stocks below their sma
+    # df_below = df[df['below sma'] == True]
+    # df_below['pct_under_sma'] = (df_below['sma'] - df_below['current_price'])/df_below['sma']
+    # below_trades = df_below['pct_under_sma'].nlargest(2)
+    # print('below trades', below_trades)
+
+    # for sid in below_trades.index:
+    #     order_target_percent(sid, 0.25)
+    #     print('Buying long:', sid)
+
+def trade_market_close(context,data):
+    
+    # Get backtest date and time for reference and print it
+    backtest_date = get_datetime()
+    print(backtest_date)
+
+    if len(context.portfolio.positions) > 0:
+        for sid in context.portfolio.positions:
+            order_target_percent(sid, 0.0)
+            print('Closed position for:', sid)
+
+def handle_data(context,data):
+    pass
+
+def cancel_open(context,data):
+    oo = get_open_orders()
+    for sec in oo:
+        for order in oo[sec]:
+            cancel_order(order.id)
+
