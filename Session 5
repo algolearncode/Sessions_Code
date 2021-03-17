@@ -1,0 +1,39 @@
+import pandas as pd
+import requests
+import io
+
+# read in previously downloaded csv holdings file into a dataframe
+df = pd.read_csv('ARK_AUTONOMOUS_TECHNOLOGY_&_ROBOTICS_ETF_ARKQ_HOLDINGS.csv')
+# csv file from ARK Funds has 2 blank lines and 1 line of strings at the end.  Remove these 3 lines.  
+df.drop(df.tail(3).index, inplace=True)
+df1 = df[['company','ticker']]
+df1
+
+# read in from ARK website the updated csv holdings file into a dataframe
+target_url = 'https://ark-funds.com/wp-content/fundsiteliterature/csv/ARK_AUTONOMOUS_TECHNOLOGY_&_ROBOTICS_ETF_ARKQ_HOLDINGS.csv'
+# access your own 'user agent' system data by using https://httpbin.org/get and then add between single quotes & remove .....
+headers = {'User-Agent': '.....'}
+url_data = requests.get(target_url, headers = headers).content
+df = pd.read_csv(io.StringIO(url_data.decode('utf-8')))
+# csv file from ARK Funds has 2 blank lines and 1 line of strings at the end.  Remove these 3 lines.  
+df.drop(df.tail(3).index, inplace=True)
+df2 = df[['company','ticker']]
+df2
+
+# using merge and lambda functions, find the rows (i.e. stocks) that are part of df2 but are not part of df1
+df = df1.merge(df2, how = 'outer', indicator = True).loc[lambda x : x['_merge'] == 'right_only']
+df_newbuys = df[['company','ticker']]
+print('ARKQ -- NEW STOCK(S) ADDED TO PORTFOLIO')
+if len(df_newbuys) > 0:
+    print(df_newbuys)
+else:
+    print('none')
+
+# using merge and lambda functions, find the rows (i.e. stocks) that are part of df1 but are not part of df2
+df = df1.merge(df2, how = 'outer', indicator = True).loc[lambda x : x['_merge'] == 'left_only']
+df_removed = df[['company','ticker']]
+print('ARKQ -- STOCK(S) REMOVED FROM PORTFOLIO')
+if len(df_removed) > 0:
+    print(df_removed)
+else:
+    print('none')
